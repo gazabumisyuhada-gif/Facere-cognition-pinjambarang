@@ -131,6 +131,59 @@ def verify_face():
             'verified': False,
             'message': 'Wajah tidak dikenali! Silakan mendaftar terlebih dahulu.'
         }), 401
+    # Endpoint untuk mengambil daftar barang yang stoknya > 0
+@app.route('/get_barang', methods=['GET'])
+def get_barang():
+    try:
+        conn = get_db_connection() # Sesuaikan nama fungsi koneksi database Anda
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, nama_barang, kategori, stok FROM barang WHERE stok > 0")
+        daftar_barang = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({'status': 'success', 'data': daftar_barang})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Endpoint untuk memproses peminjaman barang
+@app.route('/pinjam_barang', methods=['POST'])
+def pinjam_barang():
+    try:
+        data = request.json
+        nim_nip = data.get('nim_nip')
+        barang_id = data.get('barang_id')
+
+        if not nim_nip or not barang_id:
+            return jsonify({'status': 'error', 'message': 'Data tidak lengkap.'}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Cek stok barang
+        cursor.execute("SELECT stok FROM barang WHERE id = %s", (barang_id,))
+        res = cursor.fetchone()
+        if not res or res[0] <= 0:
+            return jsonify({'status': 'error', 'message': 'Stok barang habis!'}), 400
+
+        # Catat transaksi peminjaman
+        cursor.execute(
+            "INSERT INTO transaksi (nim_nip, barang_id) VALUES (%s, %s)",
+            (nim_nip, barang_id)
+        )
+
+        # Kurangi stok barang
+        cursor.execute(
+            "UPDATE barang SET stok = stok - 1 WHERE id = %s",
+            (barang_id,)
+        )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({'status': 'success', 'message': 'Peminjaman barang berhasil dicatat!'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 if __name__ == '__main__':
