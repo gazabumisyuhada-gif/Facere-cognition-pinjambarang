@@ -1,3 +1,4 @@
+from flask import render_template
 from flask import Flask, request, jsonify
 import mysql.connector
 import face_recognition
@@ -7,6 +8,9 @@ import io
 
 app = Flask(__name__)
 
+@app.route('/')
+def index():
+    return render_template('index.html')
 # Config Koneksi Database MySQL
 db_config = {
     'host': 'localhost',

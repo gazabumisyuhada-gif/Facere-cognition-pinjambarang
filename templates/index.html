@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengujian Sistem Face Recognition</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f7f6; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #333; margin-bottom: 30px; }
+        
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            flex: 1;
+            min-width: 300px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        h2 { margin-top: 0; color: #007bff; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
+        .webcam-box {
+            width: 100%;
+            height: 240px;
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 15px;
+        }
+        
+        video { width: 100%; height: 100%; object-fit: cover; }
+        canvas { display: none; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background-color: #0056b3; }
+        button.btn-verify { background-color: #28a745; }
+        button.btn-verify:hover { background-color: #218838; }
+
+        .result-box {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 5px;
+            display: none;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+
+    <h1>Pengujian Peminjaman Barang - Face Recognition</h1>
+
+    <div class="container">
+        <!-- BARIS 1: REGISTRASI WAJAH -->
+        <div class="card">
+            <h2>1. Registrasi Wajah</h2>
+            <div class="webcam-box">
+                <video id="video-reg" autoplay playsinline></video>
+            </div>
+            
+            <div class="form-group">
+                <label>NIM / NIP:</label>
+                <input type="text" id="reg-nim" placeholder="Masukkan NIM/NIP">
+            </div>
+            <div class="form-group">
+                <label>Nama Lengkap:</label>
+                <input type="text" id="reg-nama" placeholder="Masukkan Nama">
+            </div>
+            
+            <button onclick="registerFace()">Ambil Foto & Daftar</button>
+            <div id="res-reg" class="result-box"></div>
+        </div>
+
+        <!-- BARIS 2: VERIFIKASI WAJAH -->
+        <div class="card">
+            <h2>2. Verifikasi Peminjam</h2>
+            <div class="webcam-box">
+                <video id="video-ver" autoplay playsinline></video>
+            </div>
+            <p style="color: #666; font-size: 14px;">Posisikan wajah Anda tepat di depan kamera lalu klik tombol di bawah.</p>
+            
+            <button class="btn-verify" onclick="verifyFace()">Verifikasi Wajah</button>
+            <div id="res-ver" class="result-box"></div>
+        </div>
+    </div>
+
+    <!-- Canvas Tersembunyi untuk Capture Image Frame -->
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const videoReg = document.getElementById('video-reg');
+        const videoVer = document.getElementById('video-ver');
+        const canvas = document.getElementById('canvas');
+
+        // Akses Webcam Laptop/PC
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                videoReg.srcObject = stream;
+                videoVer.srcObject = stream;
+            })
+            .catch(err => {
+                alert("Gagal mengakses webcam! Pastikan izin kamera diberikan.");
+                console.error(err);
+            });
+
+        // Helper: Convert Frame Video Kamera ke File Blob/Image
+        function captureFrame(videoElem, callback) {
+            const context = canvas.getContext('2d');
+            canvas.width = videoElem.videoWidth || 640;
+            canvas.height = videoElem.videoHeight || 480;
+            context.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
+            
+            canvas.toBlob(blob => {
+                callback(blob);
+            }, 'image/jpeg');
+        }
+
+        // 1. Fungsi Registrasi Wajah
+        function registerFace() {
+            const nim = document.getElementById('reg-nim').value;
+            const nama = document.getElementById('reg-nama').value;
+            const resBox = document.getElementById('res-reg');
+
+            if (!nim || !nama) {
+                alert("NIM/NIP dan Nama wajib diisi!");
+                return;
+            }
+
+            resBox.style.display = 'none';
+
+            captureFrame(videoReg, blob => {
+                const formData = new FormData();
+                formData.append('nim_nip', nim);
+                formData.append('nama', nama);
+                formData.append('image', blob, 'user_face.jpg');
+
+                fetch('/api/register-face', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    resBox.style.display = 'block';
+                    if (data.status === 'success') {
+                        resBox.className = 'result-box success';
+                        resBox.innerHTML = data.message;
+                        document.getElementById('reg-nim').value = '';
+                        document.getElementById('reg-nama').value = '';
+                    } else {
+                        resBox.className = 'result-box danger';
+                        resBox.innerHTML = "Gagal: " + data.message;
+                    }
+                })
+                .catch(err => {
+                    alert("Terjadi kesalahan sistem saat mendaftar.");
+                    console.error(err);
+                });
+            });
+        }
+
+        // 2. Fungsi Verifikasi Wajah
+        function verifyFace() {
+            const resBox = document.getElementById('res-ver');
+            resBox.style.display = 'none';
+
+            captureFrame(videoVer, blob => {
+                const formData = new FormData();
+                formData.append('image', blob, 'verify_face.jpg');
+
+                fetch('/api/verify-face', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    resBox.style.display = 'block';
+                    if (data.status === 'success' && data.verified) {
+                        resBox.className = 'result-box success';
+                        resBox.innerHTML = `
+                            ✅ TERVERIFIKASI!<br>
+                            Nama: ${data.data.nama}<br>
+                            NIM/NIP: ${data.data.nim_nip}<br>
+                            Kemiripan: ${data.confidence}
+                        `;
+                    } else {
+                        resBox.className = 'result-box danger';
+                        resBox.innerHTML = "❌ " + (data.message || "Wajah tidak dikenali.");
+                    }
+                })
+                .catch(err => {
+                    alert("Terjadi kesalahan sistem saat verifikasi.");
+                    console.error(err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
